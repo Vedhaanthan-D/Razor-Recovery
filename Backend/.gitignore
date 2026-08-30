@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+
+# Logs & Temporary Files
+logs/
+*.log
+npm-debug.log*
+
+# Database & Local Storage
+*.sqlite
+*.sqlite3
+*.db
+
+# Build Output & Coverage
+dist/
+build/
+coverage/
+
+# OS & Editor Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python artifacts (safeguard — webapp-testing / Playwright tooling, not part of the app)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/

@@ -1,0 +1,30 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "Basic Node.js + Express backend",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node src/lib/signature.test.js && npm run test:usage && npm run test:dashboard && npm run test:classify && npm run test:verifier && npm run test:advisor && npm run test:webhook && npm run test:recovery && npm run test:orchestrator && npm run test:insights",
+    "test:classify": "node src/agents/classificationService.test.js",
+    "test:verifier": "node src/agents/verifierService.test.js",
+    "test:advisor": "node src/agents/strategyAdvisorService.test.js",
+    "test:webhook": "node src/routes/webhook.test.js",
+    "test:recovery": "node src/services/recoveryService.test.js",
+    "test:orchestrator": "node src/services/orchestratorService.test.js",
+    "test:usage": "node src/services/usageCounters.test.js",
+    "test:dashboard": "node src/routes/dashboard.test.js",
+    "test:insights": "node src/agents/insightsService.test.js"
+  },
+  "dependencies": {
+    "@mistralai/mistralai": "^2.6.3",
+    "@supabase/supabase-js": "^2.112.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "groq-sdk": "^1.5.0",
+    "razorpay": "^2.9.8"
+  }
+}

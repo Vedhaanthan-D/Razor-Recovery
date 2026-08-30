@@ -1,0 +1,68 @@
+# Dependencies
+node_modules/
+/.pnpm
+package-lock.json.log
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+
+# Build Outputs
+dist/
+dist-ssr/
+build/
+out/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Database & Local Storage
+*.sqlite
+*.sqlite3
+*.db
+
+# Testing & Coverage
+coverage/
+.nyc_output/
+.vite/
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE & Editor Files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Python (webapp-testing tooling — not part of the app)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Claude Code local settings (machine-specific paths & permission grants)
+.claude/settings.local.json

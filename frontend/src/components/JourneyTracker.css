@@ -1,0 +1,264 @@
+/* JourneyTracker — shipment-tracking–style pipeline view for one payment. Horizontal connected nodes
+   that branch into a recovery sub-row on escalation, stacking vertically on narrow viewports (the
+   same 620px breakpoint the .trace card already uses in App.css). Colour/spacing/radius all come from
+   the index.css tokens — no new colours are introduced; node states reuse the StatusPill palette. */
+
+.journey {
+  --jt-w: 104px;         /* fixed node column width — keeps circles evenly spaced & branch-aligned */
+  --jt-dot: 32px;        /* circle size (within the 28–36px brief) */
+  --jt-line: var(--border-strong);
+  margin-top: 2px;
+}
+
+/* Let a wide escalation chain scroll horizontally rather than crush the layout; vertical stacking
+   below handles small screens, so this only bites at awkward in-between widths. */
+.jt-scroll {
+  overflow-x: auto;
+  margin: 0 calc(-1 * var(--space-1));
+  padding: var(--space-2) var(--space-1) var(--space-1);
+}
+
+.jt-track {
+  display: flex;
+  align-items: flex-start;
+  min-width: min-content;
+}
+
+/* ── Node ── */
+.jt-node {
+  flex: 0 0 auto;
+  width: var(--jt-w);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  border-radius: var(--r-sm);
+  outline: none;
+}
+.jt-dot {
+  position: relative;
+  flex: none;
+  width: var(--jt-dot);
+  height: var(--jt-dot);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  transition: box-shadow 0.16s ease, transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+.jt-dot svg { flex: none; }
+
+/* Hover / focus / open affordances — subtle lift + the app's standard focus ring. */
+.jt-node:hover .jt-dot { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.jt-node:focus-visible .jt-dot,
+.jt-node.is-open .jt-dot { box-shadow: 0 0 0 3px var(--accent-ring); }
+
+/* Completion check on a finished agent step (accent dot, theme-aware tick drawn with borders). */
+.jt-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.jt-badge::after {
+  content: '';
+  width: 3px;
+  height: 6px;
+  margin-top: -1px;
+  border: solid var(--bg);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+/* ── Node tones (StatusPill palette only) ── */
+.jt-node--origin .jt-dot { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger); }
+.jt-node--step .jt-dot { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+.jt-node--ok .jt-dot { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
+.jt-node--fail .jt-dot { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger); }
+.jt-node--pending .jt-dot { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn); }
+.jt-node--none .jt-dot,
+.jt-node--skip .jt-dot { background: var(--surface-2); border-color: var(--border-strong); color: var(--text-muted); }
+
+/* Ghost / skipped: dashed + faded, but present (never a gap). */
+.jt-node--ghost { opacity: 0.72; }
+.jt-node--ghost .jt-dot { border-style: dashed; background: transparent; }
+
+/* Terminal outcome emphasis: green filled · red outline · amber pulsing. */
+.jt-node--terminal.jt-node--ok .jt-dot { background: var(--ok); border-color: var(--ok); color: var(--bg); }
+.jt-node--terminal.jt-node--fail .jt-dot { background: transparent; border-width: 2px; border-color: var(--danger); color: var(--danger); }
+.jt-node--terminal.jt-node--pending .jt-dot { animation: jt-pulse 2s ease-out infinite; }
+@keyframes jt-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 50%, transparent); }
+  70% { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* ── Node text ── */
+.jt-node-body { display: flex; flex-direction: column; align-items: center; gap: 3px; max-width: calc(var(--jt-w) + 28px); }
+.jt-node-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-h);
+  white-space: nowrap;
+}
+.jt-info { color: var(--text-muted); opacity: 0.7; flex: none; }
+.jt-node-sub { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; }
+.jt-node-note { font-size: 10px; color: var(--text-muted); font-style: italic; }
+
+.jt-chip {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: var(--r-xs);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border: 1px solid var(--accent-border);
+}
+.jt-pct { font-size: 10.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.jt-count { font-size: 10.5px; color: var(--text-muted); }
+.jt-status { font-size: 10.5px; font-weight: 650; text-transform: capitalize; }
+.jt-status--ok { color: var(--ok); }
+.jt-status--fail { color: var(--danger); }
+.jt-status--pending { color: var(--warn); }
+.jt-status--none { color: var(--text-muted); }
+
+/* ── Connectors ── */
+.jt-link {
+  flex: 1 1 auto;
+  min-width: 22px;
+  align-self: flex-start;
+  height: var(--jt-dot);
+  position: relative;
+}
+.jt-link::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--jt-dot) / 2 - 1px);
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--jt-line);
+}
+.jt-link--esc { min-width: 74px; }
+.jt-esc {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 2px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface);
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+}
+
+/* ── Recovery escalation branch ── */
+.jt-recovery { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; }
+.jt-branch { position: relative; margin-top: 14px; display: flex; align-items: flex-start; }
+/* Vertical drop from the Recovery junction down to the first attempt (both share the --jt-w/2 axis). */
+.jt-branch::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--jt-w) / 2 - 1px);
+  top: -14px;
+  height: 14px;
+  width: 2px;
+  background: var(--jt-line);
+}
+
+/* ── Detail panel (click to reveal) ── */
+.jt-detail {
+  margin-top: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  padding: var(--space-4);
+  animation: jt-fade 0.18s ease;
+}
+@keyframes jt-fade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.jt-detail-head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+.jt-detail-icon { flex: none; }
+.jt-detail-icon .jt-dot { width: 26px; height: 26px; }
+.jt-detail-title { font-weight: 650; font-size: 14px; color: var(--text-h); }
+.jt-detail-note { font-size: 11px; color: var(--text-muted); font-style: italic; }
+.jt-detail-close {
+  margin-left: auto;
+  font-size: 13px;
+  line-height: 1;
+  padding: 5px 9px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+}
+.jt-detail-close:hover { color: var(--danger); border-color: var(--danger-border); background: var(--danger-bg); box-shadow: none; }
+.jt-detail-close svg { color: currentColor; }
+.jt-detail-rows { display: grid; gap: 9px; margin: 0; }
+.jt-detail-row { display: grid; grid-template-columns: 116px 1fr; gap: var(--space-3); font-size: 13px; align-items: baseline; }
+.jt-detail-row dt {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.jt-detail-row dd { margin: 0; color: var(--text-h); line-height: 1.5; word-break: break-word; }
+
+/* ── Narrow viewports: stack vertically (matches the .trace breakpoint in App.css) ── */
+@media (max-width: 620px) {
+  .jt-scroll { overflow-x: visible; }
+  .jt-track { flex-direction: column; align-items: stretch; min-width: 0; }
+
+  .jt-node {
+    flex-direction: row;
+    align-items: center;
+    width: auto;
+    gap: var(--space-3);
+    text-align: left;
+  }
+  .jt-node-body { align-items: flex-start; max-width: none; }
+
+  /* Connectors become short vertical segments aligned under the circle centre. */
+  .jt-link {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    height: 18px;
+    align-self: stretch;
+  }
+  .jt-link::before { top: 0; bottom: 0; left: calc(var(--jt-dot) / 2 - 1px); right: auto; width: 2px; height: auto; }
+  .jt-link--esc { min-width: 0; height: auto; min-height: 26px; display: flex; align-items: center; }
+  .jt-esc { position: static; transform: none; margin-left: calc(var(--jt-dot) / 2 + 12px); }
+
+  .jt-recovery { align-items: stretch; width: 100%; }
+  .jt-branch { flex-direction: column; align-items: stretch; margin-top: 18px; }
+  .jt-branch::before { left: calc(var(--jt-dot) / 2 - 1px); top: -18px; height: 18px; }
+}

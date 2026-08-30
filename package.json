@@ -1,0 +1,10 @@
+{
+  "name": "recovery-agent",
+  "private": true,
+  "scripts": {
+    "test": "cd Backend && npm test",
+    "dev:backend": "cd Backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build"
+  }
+}

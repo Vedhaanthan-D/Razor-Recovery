@@ -1,0 +1,194 @@
+:root {
+  /* ── Design tokens ──────────────────────────────────────────────────────
+     White-first, violet-accented. ONE primary purple (#7c3aed) with a small,
+     intentional supporting palette. Neutrals are cool (very faintly violet),
+     never warm. Every text/accent pair meets WCAG AA on its own surface.
+     Spacing, radius and shadow are all token-driven so rhythm stays consistent. */
+
+  /* Surfaces — white dominant */
+  --bg: #ffffff;              /* page */
+  --surface: #ffffff;         /* cards, panels */
+  --surface-2: #faf9fd;       /* subtle cool fill: tracks, zebra, code, empty states */
+  --surface-3: #f4f2f9;       /* hover fills, pressed rows */
+
+  /* Text */
+  --text-h: #141319;          /* headings / primary — near-black, faintly cool */
+  --text: #56525f;            /* body / secondary — ~7:1 on white */
+  --text-muted: #837e90;      /* tertiary — large or non-essential only, ~4.6:1 */
+
+  /* Borders */
+  --border: #edecf2;          /* hairlines */
+  --border-strong: #e1dfe9;   /* control borders, dividers that carry weight */
+
+  /* Accent — the one purple */
+  --accent: #7c3aed;          /* primary: buttons, links, active, icons (5.8:1 on white) */
+  --accent-strong: #6d28d9;   /* hover / pressed */
+  --accent-2: #c4b5fd;        /* light violet: secondary bars, de-emphasised marks */
+  --accent-soft: #f6f4ff;     /* very subtle light-purple background tint */
+  --accent-softer: #efeafe;   /* slightly deeper soft tint for hover on soft surfaces */
+  --accent-border: #e6ddfb;   /* violet-tinted border for soft-purple surfaces */
+  --accent-ring: rgba(124, 58, 237, 0.32); /* focus ring */
+
+  /* Semantic status (convey real state — kept green/red/amber, never purple) */
+  --ok: #15803d;   --ok-bg: #eaf6ef;   --ok-border: #cdead7;
+  --danger: #b91c1c; --danger-bg: #fcebeb; --danger-border: #f4d2d2;
+  --warn: #92580a; --warn-bg: #fbf1de; --warn-border: #f0e0bd;
+
+  /* Spacing scale — the one rhythm used everywhere */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 56px;
+
+  /* Radius scale (documented — used consistently):
+     xs chips/code · sm controls (button/input/nav/pill-node) · lg cards/panels · pill status */
+  --r-xs: 7px;
+  --r-sm: 10px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+
+  /* Shadows — violet-ink tinted, soft and layered, used only for real depth */
+  --shadow-xs: 0 1px 2px rgba(24, 18, 43, 0.04);
+  --shadow-sm: 0 1px 2px rgba(24, 18, 43, 0.05), 0 1px 3px rgba(24, 18, 43, 0.04);
+  --shadow: 0 8px 24px -12px rgba(24, 18, 43, 0.16), 0 2px 6px -4px rgba(24, 18, 43, 0.08);
+  --shadow-md: 0 18px 44px -18px rgba(24, 18, 43, 0.22), 0 4px 10px -6px rgba(24, 18, 43, 0.10);
+
+  --sans: 'Geist Variable', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --heading: 'Geist Variable', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Consolas, monospace;
+
+  font: 15px/1.6 var(--sans);
+  color-scheme: light;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  @media (max-width: 1024px) {
+    font-size: 14.5px;
+  }
+}
+
+/* Dark is opt-in via the header toggle (persisted in localStorage, applied pre-paint in index.html),
+   never auto-applied from the OS — the product is white-first by design. Same violet identity,
+   brightened for contrast on cool near-black surfaces. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #131118;
+  --surface: #1b1924;
+  --surface-2: #23202d;
+  --surface-3: #2b2836;
+
+  --text-h: #f5f4f9;
+  --text: #b0abbd;
+  --text-muted: #837e91;
+
+  --border: #2a2735;
+  --border-strong: #383544;
+
+  --accent: #a78bfa;          /* violet-400 — reads on dark */
+  --accent-strong: #c4b5fd;
+  --accent-2: #6d28d9;
+  --accent-soft: rgba(167, 139, 250, 0.12);
+  --accent-softer: rgba(167, 139, 250, 0.2);
+  --accent-border: rgba(167, 139, 250, 0.32);
+  --accent-ring: rgba(167, 139, 250, 0.45);
+
+  --ok: #4ade80;   --ok-bg: rgba(74, 222, 128, 0.12);  --ok-border: rgba(74, 222, 128, 0.28);
+  --danger: #f87171; --danger-bg: rgba(248, 113, 113, 0.12); --danger-border: rgba(248, 113, 113, 0.3);
+  --warn: #fbbf24; --warn-bg: rgba(251, 191, 36, 0.12); --warn-border: rgba(251, 191, 36, 0.28);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow: 0 10px 30px -14px rgba(0, 0, 0, 0.6), 0 2px 6px -4px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 20px 48px -20px rgba(0, 0, 0, 0.7), 0 4px 10px -6px rgba(0, 0, 0, 0.5);
+}
+
+#root {
+  width: 100%;
+  margin: 0 auto;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  color: var(--text-h);
+}
+
+h1,
+h2 {
+  font-family: var(--heading);
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+h1 {
+  font-size: 34px;
+  letter-spacing: -0.8px;
+  margin: 0;
+}
+h2 {
+  font-size: 17px;
+  line-height: 1.25;
+  letter-spacing: -0.3px;
+  margin: 0 0 var(--space-2);
+}
+p {
+  margin: 0;
+}
+
+code,
+.counter {
+  font-family: var(--mono);
+  display: inline-flex;
+  border-radius: var(--r-xs);
+  color: var(--text-h);
+}
+
+code {
+  font-size: 13px;
+  line-height: 1.35;
+  padding: 3px 7px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+/* Accessibility: one consistent focus ring, only for keyboard users. It follows each
+   element's own border-radius (box-shadow does), so no radius is forced here. */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
