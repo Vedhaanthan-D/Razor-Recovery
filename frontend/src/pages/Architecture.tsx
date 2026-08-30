@@ -32,9 +32,37 @@ const FLOW: { title: string; cap: string; kind: 'start' | 'agent' | 'infra' | 'e
 // One line each — no triggers, no internals. The technical depth belongs on Recovery Journeys.
 const AGENTS: { name: string; icon: LucideIcon; line: string }[] = [
   { name: 'Classification', icon: Tag, line: 'figures out why it failed.' },
-  { name: 'Verifier', icon: ShieldCheck, line: 'double-checks when unsure.' },
+  { name: 'Verifier', icon: ShieldCheck, line: 'double-checks when unsure (confidence-weighted consensus).' },
   { name: 'Advisor', icon: Scale, line: "picks the strategy that's worked best before." },
   { name: 'Insights', icon: Sparkles, line: 'summarizes it all in plain English.' },
+]
+
+// Guardrails — deterministic rules enforced in code, independent of whatever any LLM returns. The
+// dead-card ban is the banCardAutoRetry() invariant in classificationService.js; the per-session cap
+// is MAX_LLM_CALLS_PER_SESSION (default 100), shared across every provider via usageCounters.js.
+const GUARDRAILS: { id: string; text: string }[] = [
+  {
+    id: 'dead-card',
+    text: "A card that's expired or invalid never gets auto-retried — retrying the same bad card can't succeed, so this is enforced in code, not just suggested to the AI.",
+  },
+  {
+    id: 'call-cap',
+    text: "Every AI provider call is capped per session (100 by default), so a burst of failures can't silently run up API usage.",
+  },
+]
+
+// How the Strategy Advisor decides — the real override thresholds from strategyAdvisorService.js:
+// MIN_SAMPLE (5) gates whether there's enough history to trust, MIN_EDGE (0.2 → 20 percentage points)
+// gates whether a rival strategy is enough better to override the classifier's default.
+const ADVISOR_RULES: { id: string; text: string }[] = [
+  {
+    id: 'min-sample',
+    text: "If a failure reason has fewer than 5 past recovery attempts, the advisor trusts the classifier's default — there isn't enough history to second-guess it yet.",
+  },
+  {
+    id: 'min-edge',
+    text: 'If a different strategy has succeeded at least 20 percentage points more often for the same reason, the advisor switches to it.',
+  },
 ]
 
 // SVG flow geometry, in viewBox units. The SVG scales to its container width and scrolls on narrow
@@ -129,6 +157,32 @@ export default function Architecture() {
           Everything else — the webhook, the orchestrator, the recovery calls — is deterministic plumbing
           that sequences these decisions; it doesn&rsquo;t make them.
         </p>
+      </section>
+
+      {/* Guardrails — deterministic rules that hold regardless of any model's output. */}
+      <section className="panel">
+        <h2><ShieldCheck size={18} /> Guardrails</h2>
+        <ul className="agent-lines">
+          {GUARDRAILS.map(({ id, text }) => (
+            <li key={id}>
+              <span className="step-icon accent"><ShieldCheck size={15} /></span>
+              <span>{text}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {/* How the Strategy Advisor decides — the actual override thresholds, in plain language. */}
+      <section className="panel">
+        <h2><Scale size={18} /> How the Strategy Advisor decides</h2>
+        <ul className="agent-lines">
+          {ADVISOR_RULES.map(({ id, text }) => (
+            <li key={id}>
+              <span className="step-icon accent"><Scale size={15} /></span>
+              <span>{text}</span>
+            </li>
+          ))}
+        </ul>
       </section>
 
       {/* Pipeline overview — kept: the precise step sequence, agent vs. infrastructure. */}

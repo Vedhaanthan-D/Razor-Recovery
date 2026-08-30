@@ -14,10 +14,10 @@ call ceiling, and summarized live on a dashboard.
 | Topic | Link | Key coverage |
 | --- | --- | --- |
 | Architecture & agent design | [CLAUDE.md](CLAUDE.md) | The `agents/` vs `services/` split, module map, non-negotiable conventions |
-| Phase-by-phase build log | [Phases/](Phases/) | The full build history, one folder per phase (each also keeps a `claude.md` snapshot) |
-| Failure injection & hardening | [Phases/phase 4/phase4.md](Phases/phase%204/phase4.md) · [scripts/inject.js](Backend/scripts/inject.js) | Duplicate storms, malformed payloads, provider outages, quota limits, mid-classify orphans |
+| Phase-by-phase build log | [docs/](docs/) | The full build history — one flat file per phase (`phase-1.md` … `phase-5-orchestration.md`) |
+| Failure injection & hardening | [docs/phase-4.md](docs/phase-4.md) · [scripts/inject.js](Backend/scripts/inject.js) | Duplicate storms, malformed payloads, provider outages, quota limits, mid-classify orphans |
 
-**Build phases:** [Phase 1](Phases/phase%201/v-1.0.0.md) · [Phase 2](Phases/phase%202/phase2.md) · [Phase 3](Phases/phase%203/phase3.md) · [Phase 4](Phases/phase%204/phase4.md) · [Phase 5 — orchestration](Phases/orchestration/phase5/phase5.md)
+**Build phases:** [Phase 1](docs/phase-1.md) · [Phase 2](docs/phase-2.md) · [Phase 3](docs/phase-3.md) · [Phase 4](docs/phase-4.md) · [Phase 5 — orchestration](docs/phase-5-orchestration.md)
 
 > **Note:** there is no `docs/failures.md` in the repo — the failure-injection log lives in the Phase 4 doc above,
 > and the harness that reproduces each scenario is [`Backend/scripts/inject.js`](Backend/scripts/inject.js).
@@ -34,7 +34,7 @@ The closed loop, exactly as [`Backend/src/routes/webhook.js`](Backend/src/routes
    Razorpay is acked `200` immediately — everything below runs **fire-and-forget** so LLM latency can never drop a payment.
 3. **Classify** — the Classification agent turns the raw `error_code` / `error_description` into
    `{ reason, detail, confidence, suggested_strategy }` over the LLM fallback chain (OpenRouter → Groq → Mistral).
-4. **Verify (agent)** — when confidence is low, an independent Verifier agent spends one extra call to re-check the
+4. **Verify (agent)** — a confidence-weighted consensus check: when confidence is low, an independent Verifier agent spends one extra call to re-check the
    primary result, and may override the reason/strategy before anything is persisted or acted on.
 5. **Advise** — the Strategy Advisor reweights the suggested strategy against *real historical recovery outcomes* for
    that failure reason; its output is the strategy that actually gets executed.
@@ -93,7 +93,7 @@ Using the same distinction the app's own [**How It Works**](frontend/src/pages/A
 ├── package.json                    root scripts: test / dev:backend / dev:frontend / build
 ├── README.md
 ├── CLAUDE.md                       architecture + conventions (read before changing code)
-├── Phases/                         phase-by-phase build log (phase 1–4, orchestration/phase5)
+├── docs/                           phase-by-phase build log (phase-1.md … phase-5-orchestration.md) + DEMO_SCRIPT.md
 │
 ├── Backend/                        Node.js + Express, JavaScript / CommonJS
 │   ├── .env.example
@@ -218,7 +218,7 @@ All routes are mounted under `/api`; debug-only routes live under `/api/debug`.
 The AI decision-makers in [`Backend/src/agents/`](Backend/src/agents/), in the words the app's How It Works page uses:
 
 1. **Classification** — figures out why the payment failed (`reason`, `detail`, `confidence`, `suggested_strategy`).
-2. **Verifier** — double-checks when the primary classifier is unsure, and can override it.
+2. **Verifier** (confidence-weighted consensus) — double-checks when the primary classifier is unsure, and can override it.
 3. **Strategy Advisor** — picks the strategy that's worked best before, reweighting against real recovery history.
 4. **Insights** — summarizes it all in plain English for the dashboard.
 
@@ -238,7 +238,7 @@ The backend suite runs each module's co-located `*.test.js` (signature, usage co
 agents, webhook parsing, recovery, orchestrator). A failure-injection harness,
 [`Backend/scripts/inject.js`](Backend/scripts/inject.js), sends correctly-signed webhooks to a running server to
 reproduce duplicate storms, malformed payloads, provider outages, and quota exhaustion on demand;
-[`Phases/phase 4/phase4.md`](Phases/phase%204/phase4.md) documents what broke and how it was hardened during Phase 4.
+[`docs/phase-4.md`](docs/phase-4.md) documents what broke and how it was hardened during Phase 4.
 
 ---
 
