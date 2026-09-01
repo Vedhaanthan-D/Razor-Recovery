@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { CreditCard, AlertTriangle } from 'lucide-react'
 
 const FAIL_CARD = '4000 0000 0000 0002'
+const REDIRECT_SECONDS = 5
 
 // Promoted from the Phase-1 debug page: same Razorpay flow, themed as a real page.
 export default function TestCheckout() {
+  const navigate = useNavigate()
   const [amount, setAmount] = useState(500)
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
+  // null = idle; a number = counting down before auto-redirecting to the Dashboard.
+  const [countdown, setCountdown] = useState<number | null>(null)
 
   // Load Razorpay Checkout.js once.
   useEffect(() => {
@@ -18,7 +23,26 @@ export default function TestCheckout() {
     document.body.appendChild(s)
   }, [])
 
+  // Drives the post-checkout redirect. Ticks the countdown down once a second, then
+  // navigates at 0. Kept out of the state updater so navigate() isn't a render side effect;
+  // the cleanup clears the pending timer, so leaving the page mid-countdown (a manual nav)
+  // never fires a stray redirect afterwards.
+  useEffect(() => {
+    if (countdown === null) return
+    if (countdown === 0) { navigate('/'); return }
+    const t = setTimeout(() => setCountdown((n) => (n === null ? null : n - 1)), 1000)
+    return () => clearTimeout(t)
+  }, [countdown, navigate])
+
+  // Fires when the checkout modal closes — on a completed attempt (Razorpay `handler`) OR a
+  // dismiss without paying (`modal.ondismiss`). We can't know the TRUE outcome here: the
+  // webhook that decides failed/recovered may not have landed yet. So we stay honest and
+  // let the Dashboard (which polls every 5s) be the source of truth once we land there.
+  // Idempotent — if both handler and ondismiss fire, we don't restart or stack timers.
+  const startRedirect = () => setCountdown((n) => (n === null ? REDIRECT_SECONDS : n))
+
   async function pay() {
+    setCountdown(null)   // a fresh attempt cancels any in-flight redirect
     setStatus('')
     setBusy(true)
     try {
@@ -33,8 +57,6 @@ export default function TestCheckout() {
       const Razorpay = (window as any).Razorpay
       if (!Razorpay) throw new Error('Razorpay script not loaded yet — wait a second and retry')
 
-      // Failed payments never hit `handler`; the webhook is the source of truth. Same line either way.
-      const done = () => setStatus('Checkout closed — watch it flow through the funnel on the Dashboard.')
       new Razorpay({
         key: data.key_id,
         order_id: data.order_id,
@@ -42,8 +64,8 @@ export default function TestCheckout() {
         currency: data.currency,
         name: 'Razor Recovery Payment',
         description: 'Payment Transaction',
-        handler: done,
-        modal: { ondismiss: done },
+        handler: startRedirect,
+        modal: { ondismiss: startRedirect },
       }).open()
     } catch (e: any) {
       setStatus('Error: ' + e.message)
@@ -72,7 +94,19 @@ export default function TestCheckout() {
 
         <button className="primary" onClick={pay} disabled={busy}>{busy ? 'Opening…' : 'Create test payment'}</button>
 
-        {status && <p className="status-msg">{status}</p>}
+        {countdown !== null ? (
+          <div className="status-msg" role="status" aria-live="polite">
+            {/* Deliberately does NOT claim success/failure — the outcome isn't known
+                client-side yet. The Dashboard is the source of truth once we land. */}
+            Checkout closed — see the live result on the dashboard.
+            <p className="muted small" style={{ marginTop: 6 }}>
+              Redirecting in {countdown}…{' '}
+              <a href="/" onClick={(e) => { e.preventDefault(); navigate('/') }}>Skip to dashboard now</a>
+            </p>
+          </div>
+        ) : status ? (
+          <p className="status-msg">{status}</p>
+        ) : null}
       </section>
 
       <p className="muted small">Raw data verification: <a href="/debug/payments">/debug/payments</a></p>

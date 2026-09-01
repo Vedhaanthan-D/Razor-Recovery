@@ -44,6 +44,16 @@ function money(n: number, currency: string) {
   }
 }
 
+// Compact timestamp for the activity table's "When" column — "1 Sep, 2:34 PM" instead of the
+// verbose toLocaleString() default ("1/9/2026, 12:34:56 PM") that pushed the column off the panel
+// edge. The full timestamp is still available on hover (title attr on the cell).
+function formatWhen(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return '—'
+  return d.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true })
+}
+
 // Pull the first URL out of a recovery note like "Payment link sent: https://rzp.io/i/XXXX".
 function payLink(notes: string | null): string | null {
   if (!notes) return null
@@ -283,7 +293,7 @@ export default function App() {
                           </a>
                         )}
                       </td>
-                      <td className="small">{r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</td>
+                      <td className="small" title={r.created_at ? new Date(r.created_at).toLocaleString() : undefined}>{formatWhen(r.created_at)}</td>
                     </tr>
                   )
                 })}

@@ -8,32 +8,29 @@ const { bump, count } = require("./usageCounters");
 const MAX_RAZORPAY_CALLS_PER_SESSION = Number(process.env.MAX_RAZORPAY_CALLS_PER_SESSION) || 50;
 
 // Reuses the same test-mode keys as the order-create debug route. Only paymentLink.create is real;
-// auto_retry/alt_method are mocked (see below) — a 1-week buildathon proves the decision logic and
-// tracking, not a full notification/re-charge stack.
+// auto_retry/alt_method are simulated (see below) — they never fabricate a recovered amount, so the
+// only verified "success" is a real paid payment link. A 1-week buildathon proves the decision logic
+// and tracking, not a full notification/re-charge stack.
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-// How long a mocked strategy sits at `pending` before resolving to success/failed.
+// How long a simulated strategy sits at `pending` before resolving to not-recovered (→ escalate).
 // Short so the funnel visibly moves during a live demo. Override via env if needed.
 // (env key kept as AUTO_RETRY_RESOLVE_MS for back-compat; now also governs alt_method.)
 const MOCK_RESOLVE_MS = Number(process.env.AUTO_RETRY_RESOLVE_MS) || 4000;
 
-// ponytail: mocked outcomes for the strategies without a real external callback. Real path would
-// re-charge / confirm via Razorpay and set the outcome from the API response; upgrade here if that
-// lands. auto_retry ~60% (transient retry often works); alt_method ~50% (last resort — see phase-5-orchestration.md).
-const MOCK_RESOLUTION = {
-  auto_retry: {
-    successRate: 0.6,
-    success: "Auto-retry succeeded — payment recovered",
-    fail: "Auto-retry failed after re-attempt — escalate to payment link",
-  },
-  alt_method: {
-    successRate: 0.5,
-    success: "Alternate method succeeded — payment recovered",
-    fail: "Alternate method failed — no further recovery path",
-  },
+// "Only real recoveries count." auto_retry and alt_method have no real external callback in this
+// build, so their outcome CANNOT be verified — and an unverifiable outcome must never be reported as
+// recovered money. They therefore simulate only the *attempt* (a short pending window so the funnel
+// moves live) and then resolve as not-recovered, handing control back to the orchestrator to escalate.
+// The ONLY path to `success` is a real, verified signal: the payment_link.paid webhook (an actual
+// customer payment, handled in webhook.js). Real path would re-charge / confirm via Razorpay and set
+// success from the API response; upgrade here if that lands. See phase-5-orchestration.md / CLAUDE.md.
+const SIMULATED_STRATEGIES = {
+  auto_retry: { fail: "Auto-retry attempted — recovery not confirmed, escalating to payment link" },
+  alt_method: { fail: "Alternate method attempted — recovery not confirmed, no further recovery path" },
 };
 
 // Pure (no I/O): the initial recovery_attempts row for a strategy, before any external call.
@@ -108,18 +105,18 @@ function scheduleMockedResolution(strategy, attemptId, payment, onResolve) {
 }
 
 async function resolveMocked(strategy, attemptId, payment, onResolve) {
-  const cfg = MOCK_RESOLUTION[strategy];
-  const succeeded = Math.random() < cfg.successRate;
-  const update = succeeded
-    ? { status: "success", recovered_amount: payment.amount / 100, notes: cfg.success }
-    : { status: "failed", notes: cfg.fail };
+  const cfg = SIMULATED_STRATEGIES[strategy];
+  // Unverifiable simulated strategies never self-report success — they resolve as not-recovered and
+  // let the orchestrator escalate. Only payment_link.paid (a real payment) ever marks a recovery
+  // success, so `recovered_amount` is never fabricated here.
+  const update = { status: "failed", notes: cfg.fail };
   const { error } = await supabase.from("recovery_attempts").update(update).eq("id", attemptId);
   if (error) {
     console.error(`[recovery] ${strategy} status update failed for ${attemptId}: ${error.message}`);
     return;
   }
-  console.log(`[recovery] ${strategy} ${attemptId} resolved → ${update.status}`);
-  if (onResolve) onResolve(update.status); // 'success' | 'failed' — orchestrator reacts (never throws here)
+  console.log(`[recovery] ${strategy} ${attemptId} resolved → ${update.status} (not recovered — escalate)`);
+  if (onResolve) onResolve(update.status); // always 'failed' — orchestrator escalates (never throws here)
 }
 
 /**
@@ -144,7 +141,7 @@ async function executeRecovery(paymentId, payment, strategy, onResolve) {
     const attemptId = await insertAttempt(paymentId, row);
     if (!attemptId) return null; // insert failed and was logged; nothing more to do
 
-    if (MOCK_RESOLUTION[row.strategy]) {
+    if (SIMULATED_STRATEGIES[row.strategy]) {
       scheduleMockedResolution(row.strategy, attemptId, payment, onResolve);
     }
     return attemptId;
