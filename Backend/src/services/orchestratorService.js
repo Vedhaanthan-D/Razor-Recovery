@@ -5,7 +5,7 @@ const { ESCALATION_POLICY } = require("../config/escalationPolicy");
 // Deterministic escalation state machine. NOT an AI agent — no LLM call happens here. The reasoning
 // happened once, upstream, in classificationService.js; this layer just sequences that decision via
 // ESCALATION_POLICY so a failed first strategy escalates instead of dead-ending. See CLAUDE.md /
-// phase-5.md for the terminology note (don't overstate this as "agentic").
+// phase-5-orchestration.md for the terminology note (don't overstate this as "agentic").
 
 // Pure (no I/O): given a strategy and what happened to it ('fail' | 'timeout'), what runs next?
 // Returns { next, terminal }. next=null + terminal=true means "chain exhausted — mark the payment lost".
@@ -76,7 +76,7 @@ function scheduleLinkTimeout(paymentId, payment, attemptId) {
     );
   }, ms);
   // ponytail: in-memory timer, lost on restart — same pattern as the mocked auto_retry resolve. A
-  // durable job queue is explicitly out of scope (phase-5.md); the reconciliation sweep covers orphans.
+  // durable job queue is explicitly out of scope (phase-5-orchestration.md); the reconciliation sweep covers orphans.
   if (timer.unref) timer.unref();
 }
 

@@ -6,7 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
+    "dev": "nodemon src/server.js",
     "test": "node src/lib/signature.test.js && npm run test:usage && npm run test:dashboard && npm run test:classify && npm run test:verifier && npm run test:advisor && npm run test:webhook && npm run test:recovery && npm run test:orchestrator && npm run test:insights",
     "test:classify": "node src/agents/classificationService.test.js",
     "test:verifier": "node src/agents/verifierService.test.js",
@@ -26,5 +26,8 @@
     "express": "^4.19.2",
     "groq-sdk": "^1.5.0",
     "razorpay": "^2.9.8"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }

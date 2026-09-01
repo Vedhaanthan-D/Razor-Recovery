@@ -40,7 +40,8 @@ export default function TestCheckout() {
         order_id: data.order_id,
         amount: data.amount,
         currency: data.currency,
-        name: 'Webhook Pipeline Test',
+        name: 'Razor Recovery Payment',
+        description: 'Payment Transaction',
         handler: done,
         modal: { ondismiss: done },
       }).open()

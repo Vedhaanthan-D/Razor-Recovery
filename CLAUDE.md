@@ -4,7 +4,7 @@ Project context for AI coding assistance. Read this before making changes.
 
 ## Project
 
-**Recovery Agent** — AI-powered payment recovery system for the Razorpay AI Buildathon
+**Razor Recovery** — AI-powered payment recovery system for the Razorpay AI Buildathon
 (Track 3: AI Revenue Recovery).
 
 Listens to failed Razorpay payment webhooks, classifies the failure reason using an LLM,

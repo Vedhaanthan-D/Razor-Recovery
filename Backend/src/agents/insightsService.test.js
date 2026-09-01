@@ -71,7 +71,7 @@ function fixture() {
     const out = await generateInsight({ loadAggregate: async () => agg, callLLM: boom });
 
     assert.strictEqual(out.summary, templateSummary(agg), "fallback is the template");
-    assert.match(out.summary, /61%/, "fallback has the real recovery rate");        // 12400/20400
+    assert.match(out.summary, /50%/, "fallback has the real recovery rate");        // 5/10 (count-based)
     assert.match(out.summary, /network_timeout/, "fallback names the top failure");
     assert.match(out.summary, /12,400/, "fallback shows the recovered amount");
     assert.ok(out.generated_at, "generated_at still set on fallback");
@@ -100,7 +100,7 @@ function fixture() {
   // 4. buildUserPrompt embeds computed fields, not just echoes.
   {
     const p = buildUserPrompt(fixture());
-    assert.ok(p.includes("\"recovery_rate_pct\":61"), "prompt includes the computed recovery rate");
+    assert.ok(p.includes("\"recovery_rate_pct\":50"), "prompt includes the computed recovery rate");
     assert.ok(p.includes("\"success_rate_pct\":75"), "prompt includes per-strategy success rate");
     assert.ok(!p.includes("recent"), "prompt drops the noisy recent[] table");
   }
@@ -174,7 +174,7 @@ function fixture() {
   // 9. buildAskPrompt carries both the aggregate and the recent traces (belt-and-suspenders on #5).
   {
     const p = buildAskPrompt(fixture(), "how many payments were lost?");
-    assert.ok(p.includes("\"recovery_rate_pct\":61"), "ask prompt keeps the computed aggregate");
+    assert.ok(p.includes("\"recovery_rate_pct\":50"), "ask prompt keeps the computed aggregate");
     assert.ok(p.includes("pay_TEST123"), "ask prompt includes recent[] traces");
     assert.ok(p.includes("how many payments were lost?"), "ask prompt appends the question");
   }
@@ -278,6 +278,40 @@ function fixture() {
       /INSIGHTS_OPENROUTER_TIMEOUT_MS\s*=\s*Number\(process\.env\.INSIGHTS_OPENROUTER_TIMEOUT_MS\)\s*\|\|\s*8000/,
       "insights defaults its openrouter timeout to 8000ms (8s)"
     );
+  }
+
+  // 14. Count-based vs money-based rate discrepancy guard:
+  //     An aggregate where count-based rate (1/9 = 11%) differs from money-based rate (5000/10000 = 50%)
+  //     must use the count-based rate (11%) in compactStats, user prompt, and templated summary.
+  {
+    _clearCache();
+    const aggDivergent = {
+      funnel: { failed: 9, classified: 9, recovery_attempted: 5, recovered: 1 },
+      money: { recovered: 5000, lost: 5000, currency: "INR" },
+      by_reason: [{ reason: "network_timeout", count: 9 }],
+      by_strategy: [{ strategy: "payment_link", attempted: 5, succeeded: 1, success_rate: 0.2 }],
+      recent: [],
+    };
+
+    // Prompt carries count-based 11%, NOT money-based 50%
+    const promptText = buildUserPrompt(aggDivergent);
+    assert.ok(promptText.includes('"recovery_rate_pct":11'), "prompt carries count-based 11% rate, not money-based 50%");
+    assert.ok(!promptText.includes('"recovery_rate_pct":50'), "prompt does not use money-based 50% rate");
+
+    // Fallback template uses count-based 11%
+    const fallbackText = templateSummary(aggDivergent);
+    assert.match(fallbackText, /11%/, "templated fallback uses count-based 11% rate");
+
+    // Full LLM flow receives system prompt instruction and outputs count-based percentage
+    let seenSystem = "", seenUser = "";
+    const callLLM = async (system, user) => {
+      seenSystem = system;
+      seenUser = user;
+      return "Recovered ₹5,000 of ₹10,000 (11% recovery rate). Top failure: network_timeout.";
+    };
+    const res = await generateInsight({ loadAggregate: async () => aggDivergent, callLLM });
+    assert.match(res.summary, /11%/, "generated summary matches count-based recovery rate");
+    assert.match(seenSystem, /Use the provided recovery_rate_pct value exactly as given/i, "system prompt instructs LLM to use pre-computed rate verbatim");
   }
 
   console.log("insightsService.test.js: all assertions passed");

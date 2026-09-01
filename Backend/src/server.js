@@ -20,6 +20,9 @@ app.use("/api", dashboardRoute);
 app.use("/api", insightsRoute);
 app.use("/api/debug", testRoute);
 
+// Explicit 404 for unmatched /api/* requests so mistyped endpoints return JSON, not the SPA fallback index.html.
+app.use("/api", (req, res) => res.status(404).json({ error: "not found", path: req.originalUrl }));
+
 // Serve the built frontend + SPA history-fallback, so a single URL (Express) can back the whole
 // demo. Registered AFTER every /api route so it never swallows a real API request. Dev doesn't hit
 // this path — Vite serves the frontend and proxies /api here (see frontend/vite.config.ts). Note:

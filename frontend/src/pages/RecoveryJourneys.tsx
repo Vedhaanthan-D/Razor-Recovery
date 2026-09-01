@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import type { ReactNode } from 'react'
-import { Workflow, ChevronDown, CreditCard, AlertTriangle, Tag, Scale } from 'lucide-react'
+import { Workflow, ChevronDown, CreditCard, AlertTriangle, Tag, Scale, Search, X, RefreshCw } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import JourneyTracker from '../components/JourneyTracker'
 import { strategyLabel, providerLabel, humanizeReason } from '../App'
@@ -15,7 +15,7 @@ export type Attempt = {
   attempted_at: string | null
 }
 
-// A payment's full pipeline trace — the fields GET /api/dashboard already returns per recent[] row.
+// A payment's full pipeline trace — the fields GET /api/dashboard/journeys returns.
 export type Trace = {
   razorpay_payment_id: string
   amount: number | null
@@ -23,8 +23,8 @@ export type Trace = {
   method: string | null
   status: string | null
   created_at: string | null
-  error_code: string | null        // raw Razorpay code, e.g. BAD_REQUEST_ERROR (returned by dashboard.js)
-  error_description: string | null  // raw Razorpay human message (returned by dashboard.js)
+  error_code: string | null        // raw Razorpay code, e.g. BAD_REQUEST_ERROR
+  error_description: string | null  // raw Razorpay human message
   failure_reason: string | null
   detail: string | null
   confidence: number | null
@@ -37,6 +37,19 @@ export type Trace = {
   attempts: Attempt[]
 }
 
+const KNOWN_REASONS = [
+  'insufficient_funds',
+  'bank_decline',
+  'card_expired',
+  'card_invalid',
+  'network_timeout',
+  'domestic_only_restriction',
+  'currency_mismatch',
+  'authentication_failed',
+  'limit_exceeded',
+  'other',
+]
+
 function money(n: number, currency: string) {
   try {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
@@ -45,9 +58,7 @@ function money(n: number, currency: string) {
   }
 }
 
-// The recovery chain's terminal outcome — same semantics as JourneyTracker.terminalState (success from
-// the last attempt, 'lost' from t.status, else pending; none when nothing's been attempted yet). Kept
-// local rather than shared because it also carries the label + colour tone used by the one-liner.
+// The recovery chain's terminal outcome — same semantics as JourneyTracker.terminalState.
 function outcome(t: Trace): { label: string; tone: 'ok' | 'fail' | 'pending' | 'none' } {
   const a = t.attempts ?? []
   if (a.length === 0) return { label: 'Awaiting recovery', tone: 'none' }
@@ -58,30 +69,152 @@ function outcome(t: Trace): { label: string; tone: 'ok' | 'fail' | 'pending' | '
 }
 
 export default function RecoveryJourneys() {
+  const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [status, setStatus] = useState('all')
+  const [reason, setReason] = useState('all')
+  const [strategy, setStrategy] = useState('all')
+  const [limit, setLimit] = useState(20)
+
   const [traces, setTraces] = useState<Trace[]>([])
+  const [total, setTotal] = useState(0)
+  const [fetchedReasons, setFetchedReasons] = useState<string[]>([])
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [isFetchingMore, setIsFetchingMore] = useState(false)
   const [err, setErr] = useState('')
+
+  // Debounce search input by 300ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  const handleStatusChange = (val: string) => { setStatus(val); setLimit(20) }
+  const handleReasonChange = (val: string) => { setReason(val); setLimit(20) }
+  const handleStrategyChange = (val: string) => { setStrategy(val); setLimit(20) }
+
+  const clearFilters = () => {
+    setSearch('')
+    setDebouncedSearch('')
+    setStatus('all')
+    setReason('all')
+    setStrategy('all')
+    setLimit(20)
+  }
+
+  const hasActiveFilters = search !== '' || status !== 'all' || reason !== 'all' || strategy !== 'all'
+
+  const allReasonsList = useMemo(() => {
+    const set = new Set([...KNOWN_REASONS, ...fetchedReasons])
+    return Array.from(set).sort()
+  }, [fetchedReasons])
 
   useEffect(() => {
     let alive = true
-    fetch('/api/dashboard')
+    if (traces.length > 0 && limit > 20) {
+      setIsFetchingMore(true)
+    } else {
+      setState('loading')
+    }
+
+    const params = new URLSearchParams()
+    if (debouncedSearch) params.set('search', debouncedSearch)
+    if (status !== 'all') params.set('status', status)
+    if (reason !== 'all') params.set('reason', reason)
+    if (strategy !== 'all') params.set('strategy', strategy)
+    params.set('limit', String(limit))
+    params.set('offset', '0')
+
+    fetch(`/api/dashboard/journeys?${params.toString()}`)
       .then((r) => r.json().then((b) => { if (!r.ok) throw new Error(b.error || 'fetch failed'); return b }))
-      .then((b) => { if (alive) { setTraces((b.recent || []).slice(0, 15)); setState('ready') } })
-      .catch((e) => { if (alive) { setErr(e.message); setState('error') } })
+      .then((b) => {
+        if (alive) {
+          const items = b.items || b.traces || []
+          setTraces(items)
+          setTotal(b.total ?? items.length)
+          if (b.reasons) setFetchedReasons(b.reasons)
+          setState('ready')
+          setIsFetchingMore(false)
+        }
+      })
+      .catch((e) => {
+        if (alive) {
+          setErr(e.message)
+          setState('error')
+          setIsFetchingMore(false)
+        }
+      })
+
     return () => { alive = false }
-  }, [])
+  }, [debouncedSearch, status, reason, strategy, limit])
 
   return (
     <div className="dash">
       <header className="page-head">
         <h1><Workflow size={26} /> Recovery Journeys</h1>
-        <p className="muted">Each of the last ~15 failed payments as a one-line summary — click any row to expand its full trace: classification, verification, strategy advice, and the recovery attempts that followed.</p>
+        <p className="muted">
+          Explore and filter all failed payments — click any row to expand its full trace: classification, verification, strategy advice, and the recovery attempts that followed.
+        </p>
       </header>
+
+      {/* Filter Bar */}
+      <div className="filter-bar">
+        <div className="filter-input-wrap">
+          <Search size={16} aria-hidden="true" />
+          <input
+            type="text"
+            className="filter-input"
+            placeholder="Search by payment ID or amount..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        <select className="filter-select" value={status} onChange={(e) => handleStatusChange(e.target.value)}>
+          <option value="all">All statuses</option>
+          <option value="recovered">Recovered</option>
+          <option value="lost">Lost</option>
+          <option value="pending">Pending</option>
+          <option value="awaiting">Awaiting recovery</option>
+        </select>
+
+        <select className="filter-select" value={reason} onChange={(e) => handleReasonChange(e.target.value)}>
+          <option value="all">All reasons</option>
+          {allReasonsList.map((r) => (
+            <option key={r} value={r}>
+              {humanizeReason(r)}
+            </option>
+          ))}
+        </select>
+
+        <select className="filter-select" value={strategy} onChange={(e) => handleStrategyChange(e.target.value)}>
+          <option value="all">All strategies</option>
+          <option value="auto_retry">Automatic retry</option>
+          <option value="payment_link">Payment link</option>
+          <option value="alt_method">Alternate method</option>
+        </select>
+
+        {hasActiveFilters && (
+          <button type="button" className="clear-filters-btn" onClick={clearFilters}>
+            <X size={14} aria-hidden="true" /> Clear filters
+          </button>
+        )}
+      </div>
+
+      {state === 'ready' && (
+        <div className="journeys-meta-bar">
+          <span>
+            {total > 0 ? `Showing ${traces.length} of ${total} ${total === 1 ? 'payment' : 'payments'}` : '0 payments'}
+          </span>
+        </div>
+      )}
 
       {state === 'loading' && (
         <div className="traces" aria-busy="true" aria-live="polite">
           <span className="sr-only">Loading recovery journeys</span>
-          {[0, 1, 2, 3, 4].map((i) => (
+          {[0, 1, 2, 3].map((i) => (
             <section className="trace rj-item" key={i}>
               <div className="rj-summary rj-summary--skel">
                 <div className="skel skel-line" style={{ width: `${66 - i * 7}%`, maxWidth: 540 }} />
@@ -91,14 +224,47 @@ export default function RecoveryJourneys() {
           ))}
         </div>
       )}
+
       {state === 'error' && <p className="err">Failed to load: {err}</p>}
+
       {state === 'ready' && traces.length === 0 && (
-        <p className="muted zero">No payments yet. Trigger one from the Checkout page and it will appear here.</p>
+        <div className="zero">
+          {hasActiveFilters ? (
+            <div>
+              <p>No payments match your current filters.</p>
+              <button type="button" className="clear-filters-btn" style={{ marginTop: 12 }} onClick={clearFilters}>
+                <X size={14} aria-hidden="true" /> Clear filters
+              </button>
+            </div>
+          ) : (
+            <p className="muted">No payments yet. Trigger one from the Checkout page and it will appear here.</p>
+          )}
+        </div>
       )}
 
-      <div className="traces">
-        {traces.map((t) => <TraceCard key={t.razorpay_payment_id} t={t} />)}
-      </div>
+      {state === 'ready' && traces.length > 0 && (
+        <>
+          <div className="traces">
+            {traces.map((t) => (
+              <TraceCard key={t.razorpay_payment_id} t={t} />
+            ))}
+          </div>
+
+          {traces.length < total && (
+            <div className="load-more-wrap">
+              <button type="button" onClick={() => setLimit((l) => l + 20)} disabled={isFetchingMore}>
+                {isFetchingMore ? (
+                  <>
+                    <RefreshCw size={15} className="spin" /> Loading...
+                  </>
+                ) : (
+                  `Load more (${total - traces.length} remaining)`
+                )}
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }

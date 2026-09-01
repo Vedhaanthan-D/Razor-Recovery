@@ -2,7 +2,7 @@
 // Checks the escalation state machine's decision table: what runs next when a strategy fails or times
 // out, and where the chain terminates (→ payment marked lost). The async I/O around it (mocked resolve
 // timers, the payment_link timeout claim, the payment_link.paid mirror guard) is verified live via
-// scripts/inject.js + the dashboard — see phase-5.md acceptance criteria; this pins the pure branching.
+// scripts/inject.js + the dashboard — see phase-5-orchestration.md acceptance criteria; this pins the pure branching.
 const assert = require("assert");
 const { nextStrategy, timeoutMs } = require("./orchestratorService");
 

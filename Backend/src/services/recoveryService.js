@@ -22,7 +22,7 @@ const MOCK_RESOLVE_MS = Number(process.env.AUTO_RETRY_RESOLVE_MS) || 4000;
 
 // ponytail: mocked outcomes for the strategies without a real external callback. Real path would
 // re-charge / confirm via Razorpay and set the outcome from the API response; upgrade here if that
-// lands. auto_retry ~60% (transient retry often works); alt_method ~50% (last resort — see phase-5.md).
+// lands. auto_retry ~60% (transient retry often works); alt_method ~50% (last resort — see phase-5-orchestration.md).
 const MOCK_RESOLUTION = {
   auto_retry: {
     successRate: 0.6,

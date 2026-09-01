@@ -1,5 +1,5 @@
 {
-  "name": "recovery-agent",
+  "name": "razor-recovery",
   "private": true,
   "scripts": {
     "test": "cd Backend && npm test",

@@ -39,6 +39,8 @@ const SYSTEM_PROMPT = [
   "Write a concise 2-3 sentence plain-English summary for a business operator.",
   "Lead with money recovered vs lost and the recovery rate. Name the most common failure reason and",
   "say which recovery strategy is working best or worst. Use the ACTUAL numbers from the data.",
+  "Use the provided recovery_rate_pct value exactly as given for the recovery rate — do not calculate your own percentage from the money figures, as they measure different things (money-weighted vs count-weighted).",
+  "Use the provided strategy_success_rates values (success_rate_pct) exactly as given for each strategy's success rate — do not calculate your own percentages.",
   "No preamble, no bullet points, no markdown — just the summary sentences.",
 ].join("\n");
 
@@ -70,12 +72,13 @@ function fmtMoney(n, currency) {
 // Compact the aggregate down to what the summary needs (drop the recent[] table — it's per-payment noise).
 function compactStats({ funnel, money, by_reason, by_strategy }) {
   const total = money.recovered + money.lost;
+  const rate = funnel.failed ? Math.round((funnel.recovered / funnel.failed) * 100) : 0;
   return {
     currency: money.currency,
     recovered: money.recovered,
     lost: money.lost,
     total_at_risk: total,
-    recovery_rate_pct: total ? Math.round((money.recovered / total) * 100) : 0,
+    recovery_rate_pct: rate,
     funnel,
     top_failure_reasons: by_reason.slice(0, 5),
     strategy_success_rates: by_strategy.map((s) => ({
@@ -123,7 +126,7 @@ function buildAskPrompt(agg, question) {
 // Numbers-only fallback — never calls an LLM. Always returns something useful (requirement 4).
 function templateSummary({ funnel, money, by_reason }) {
   const total = money.recovered + money.lost;
-  const rate = total ? Math.round((money.recovered / total) * 100) : 0;
+  const rate = funnel.failed ? Math.round((funnel.recovered / funnel.failed) * 100) : 0;
   const topReason = by_reason[0] ? by_reason[0].reason : "none";
   return `Recovered ${fmtMoney(money.recovered, money.currency)} of ${fmtMoney(total, money.currency)} (${rate}%). Top failure: ${topReason}.`;
 }
@@ -233,7 +236,9 @@ async function callLLMChain(system, user, openrouterTimeoutMs) {
 // Never throws: LLM failure -> templated numbers-only summary.
 async function summarize(agg, callLLM) {
   try {
-    const text = await callLLM(SYSTEM_PROMPT, buildUserPrompt(agg), INSIGHTS_OPENROUTER_TIMEOUT_MS);
+    const promptText = buildUserPrompt(agg);
+    console.log("[insights] prompt:\n" + promptText);
+    const text = await callLLM(SYSTEM_PROMPT, promptText, INSIGHTS_OPENROUTER_TIMEOUT_MS);
     const summary = String(text || "").replace(/\s+/g, " ").trim();
     if (!summary) throw new Error("empty summary");
     return summary;

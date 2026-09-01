@@ -1,4 +1,4 @@
-# Recovery Agent
+# Razor Recovery
 
 **AI-driven recovery for failed Razorpay payments — Razorpay AI Buildathon · Track 3: AI Revenue Recovery**
 

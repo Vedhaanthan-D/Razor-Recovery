@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { LayoutDashboard, CreditCard, Workflow, Network, Sparkles, Sun, Moon } from 'lucide-react'
+import { LayoutDashboard, CreditCard, Workflow, Network, Sun, Moon } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import logoImg from '../assets/logo.png'
 
 // Persistent top nav shown on the 4 themed pages. Debug pages render outside this layout, so they
 // stay chrome-free. Active page is highlighted via NavLink's isActive.
@@ -16,7 +17,9 @@ export default function Layout() {
   return (
     <div className="app">
       <nav className="nav">
-        <div className="nav-brand"><Sparkles size={20} /> Recovery Agent</div>
+        <NavLink to="/" className="nav-brand" aria-label="Razor Recovery Home">
+          <img src={logoImg} alt="Razor Recovery" className="nav-logo" />
+        </NavLink>
         <div className="nav-right">
           <div className="nav-links">
             {NAV.map(({ to, label, icon: Icon, end }) => (

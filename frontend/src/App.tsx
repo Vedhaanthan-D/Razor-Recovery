@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, XCircle, Percent, Filter, AlertTriangle, BarChart3, Activity, Info, ExternalLink, RefreshCw } from 'lucide-react'
+import { CheckCircle2, XCircle, Percent, Filter, AlertTriangle, BarChart3, Activity, Info, ExternalLink, RefreshCw, Clock } from 'lucide-react'
 import StatusPill from './components/StatusPill'
 import InsightsPanel from './components/InsightsPanel'
 import './App.css'
@@ -7,10 +7,11 @@ import './App.css'
 // Shape returned by GET /api/dashboard (see Backend/src/routes/dashboard.js).
 type Dashboard = {
   funnel: { failed: number; classified: number; recovery_attempted: number; recovered: number }
-  money: { recovered: number; lost: number; currency: string }
+  money: { recovered: number; lost: number; pending?: number; currency: string }
   by_reason: { reason: string; count: number }[]
   by_strategy: { strategy: string; attempted: number; succeeded: number; success_rate: number }[]
   recent: Recent[]
+  template_summary?: string
 }
 
 type Recent = {
@@ -116,7 +117,7 @@ export default function App() {
     <div className="dash">
       <header className="dash-head">
         <div>
-          <h1>Recovery Agent</h1>
+          <h1>Razor Recovery</h1>
           <p className="muted">AI payment-failure recovery — live funnel</p>
         </div>
         <button onClick={load}><RefreshCw size={15} /> Retry</button>
@@ -128,7 +129,7 @@ export default function App() {
 
   const { funnel, money: m, by_reason, by_strategy, recent } = data
   const max = Math.max(funnel.failed, 1)
-  const totalMoney = m.recovered + m.lost
+  const totalMoney = m.recovered + m.lost + (m.pending || 0)
   const recoveryRate = funnel.failed ? Math.round((funnel.recovered / funnel.failed) * 100) : 0
   const empty = funnel.failed === 0
 
@@ -136,7 +137,7 @@ export default function App() {
     <div className="dash">
       <header className="dash-head">
         <div>
-          <h1>Recovery Agent</h1>
+          <h1>Razor Recovery</h1>
           <p className="muted">AI payment-failure recovery — live funnel</p>
         </div>
         <div className="head-actions">
@@ -152,17 +153,24 @@ export default function App() {
         </p>
       )}
 
-      <InsightsPanel />
+      <InsightsPanel initialSummary={data.template_summary} />
 
       {/* Money headline */}
       <section className="cards">
         <div className="card good">
           <span className="card-label"><CheckCircle2 size={14} /> Recovered</span>
           <span className="card-value">{money(m.recovered, m.currency)}</span>
+          <span className="card-label small">₹ actually recovered</span>
+        </div>
+        <div className="card pending">
+          <span className="card-label"><Clock size={14} /> Pending (in progress)</span>
+          <span className="card-value">{money(m.pending || 0, m.currency)}</span>
+          <span className="card-label small">₹ recovery ongoing</span>
         </div>
         <div className="card bad">
           <span className="card-label"><XCircle size={14} /> Lost (unrecovered)</span>
           <span className="card-value">{money(m.lost, m.currency)}</span>
+          <span className="card-label small">₹ unrecovered final</span>
         </div>
         <div className="card">
           <span className="card-label"><Percent size={14} /> Recovery rate</span>

@@ -1,4 +1,4 @@
--- Recovery Agent — Phase 1 schema
+-- Razor Recovery — Phase 1 schema
 -- Run in Supabase SQL editor (or: psql "$DATABASE_URL" -f db/schema.sql)
 -- Idempotent: safe to re-run.
 
@@ -55,3 +55,5 @@ create table if not exists recovery_attempts (
 
 create index if not exists idx_payments_status on payments(status);
 create index if not exists idx_recovery_payment_id on recovery_attempts(payment_id);
+create index if not exists idx_payments_razorpay_payment_id on payments(razorpay_payment_id);
+create index if not exists idx_payments_created_at on payments(created_at);

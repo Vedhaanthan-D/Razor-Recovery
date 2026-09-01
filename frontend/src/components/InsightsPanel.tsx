@@ -12,9 +12,13 @@ const MAX_LEN = 300 // mirrors the backend cap so the input can't outgrow what /
 
 type QA = { id: number; q: string; a: string; error?: boolean }
 
-export default function InsightsPanel() {
-  const [summary, setSummary] = useState('')
-  const [sumState, setSumState] = useState<'loading' | 'ready' | 'error'>('loading')
+type InsightsPanelProps = {
+  initialSummary?: string
+}
+
+export default function InsightsPanel({ initialSummary }: InsightsPanelProps) {
+  const [summary, setSummary] = useState(initialSummary || '')
+  const [isAi, setIsAi] = useState(false)
 
   const [question, setQuestion] = useState('')
   const [asking, setAsking] = useState(false)
@@ -22,14 +26,27 @@ export default function InsightsPanel() {
   const idRef = useRef(0)
   const listRef = useRef<HTMLDivElement | null>(null)
 
-  // Summary: fetched once. The backend caches for 5 min, so re-fetching on the dashboard's 5s poll
-  // would just waste calls. Failure is non-fatal — the Ask box below still works.
+  // Keep initialSummary in sync if initial load completes after component mount
+  useEffect(() => {
+    if (initialSummary && !isAi) {
+      setSummary(initialSummary)
+    }
+  }, [initialSummary, isAi])
+
+  // Simultaneously fire GET /api/insights in background without blocking initial render
   useEffect(() => {
     let alive = true
     fetch('/api/insights')
       .then((r) => r.json().then((b) => { if (!r.ok) throw new Error(b.error || 'failed'); return b }))
-      .then((b) => { if (alive) { setSummary(b.summary || ''); setSumState('ready') } })
-      .catch(() => { if (alive) setSumState('error') })
+      .then((b) => {
+        if (alive && b.summary) {
+          setSummary(b.summary)
+          setIsAi(true)
+        }
+      })
+      .catch(() => {
+        // Safe fallback: numbers-only summary remains permanently displayed if AI call fails
+      })
     return () => { alive = false }
   }, [])
 
@@ -63,16 +80,13 @@ export default function InsightsPanel() {
     }
   }
 
-  const summaryText =
-    sumState === 'loading' ? 'Generating summary…'
-      : sumState === 'error' ? 'Summary unavailable right now — you can still ask questions below.'
-        : summary
+  const summaryText = summary || initialSummary || 'Summary unavailable right now.'
 
   return (
     <section className="insight insight-panel">
       <div className="insight-row">
         <span className="insight-tag"><Sparkles size={14} /> AI insight</span>
-        <span className={sumState === 'ready' ? undefined : 'muted'}>{summaryText}</span>
+        <span>{summaryText}</span>
       </div>
 
       <div className="ask">

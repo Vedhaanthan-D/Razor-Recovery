@@ -94,7 +94,6 @@ function parseFailedPayment(body) {
 // payment_link.paid → flip the matching payment_link recovery_attempts row to success.
 // Match path: reference_id → payments.razorpay_payment_id → payments.id → recovery_attempts row.
 async function handlePaymentLinkPaid(req, res) {
-  console.log("[webhook] payment_link.paid payload:", JSON.stringify(req.body)); // ponytail: shape-confirm log, drop once verified live
   const parsed = parsePaymentLinkPaid(req.body);
   if (!parsed) {
     console.warn("[webhook] payment_link.paid ignored — reference_id is not a rec_ recovery link");
