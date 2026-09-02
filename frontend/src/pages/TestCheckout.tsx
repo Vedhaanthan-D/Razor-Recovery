@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CreditCard, AlertTriangle } from 'lucide-react'
 
@@ -13,6 +13,7 @@ export default function TestCheckout() {
   const [busy, setBusy] = useState(false)
   // null = idle; a number = counting down before auto-redirecting to the Dashboard.
   const [countdown, setCountdown] = useState<number | null>(null)
+  const redirectStartedRef = useRef(false)
 
   // Load Razorpay Checkout.js once.
   useEffect(() => {
@@ -34,14 +35,17 @@ export default function TestCheckout() {
     return () => clearTimeout(t)
   }, [countdown, navigate])
 
-  // Fires when the checkout modal closes — on a completed attempt (Razorpay `handler`) OR a
-  // dismiss without paying (`modal.ondismiss`). We can't know the TRUE outcome here: the
-  // webhook that decides failed/recovered may not have landed yet. So we stay honest and
-  // let the Dashboard (which polls every 5s) be the source of truth once we land there.
-  // Idempotent — if both handler and ondismiss fire, we don't restart or stack timers.
-  const startRedirect = () => setCountdown((n) => (n === null ? REDIRECT_SECONDS : n))
+  // Fires when the checkout modal closes or fails — on a completed attempt (Razorpay `handler`),
+  // dismiss without paying (`modal.ondismiss`), OR payment failure (`payment.failed`).
+  // Idempotent — guarded by redirectStartedRef so repeated events don't restart or stack timers.
+  const startRedirect = () => {
+    if (redirectStartedRef.current) return
+    redirectStartedRef.current = true
+    setCountdown(REDIRECT_SECONDS)
+  }
 
   async function pay() {
+    redirectStartedRef.current = false
     setCountdown(null)   // a fresh attempt cancels any in-flight redirect
     setStatus('')
     setBusy(true)
@@ -57,7 +61,7 @@ export default function TestCheckout() {
       const Razorpay = (window as any).Razorpay
       if (!Razorpay) throw new Error('Razorpay script not loaded yet — wait a second and retry')
 
-      new Razorpay({
+      const rzp = new Razorpay({
         key: data.key_id,
         order_id: data.order_id,
         amount: data.amount,
@@ -66,7 +70,11 @@ export default function TestCheckout() {
         description: 'Payment Transaction',
         handler: startRedirect,
         modal: { ondismiss: startRedirect },
-      }).open()
+      })
+      rzp.on('payment.failed', function (_response: any) {
+        startRedirect()
+      })
+      rzp.open()
     } catch (e: any) {
       setStatus('Error: ' + e.message)
     } finally {

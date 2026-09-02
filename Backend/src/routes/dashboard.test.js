@@ -120,6 +120,24 @@ assert.deepStrictEqual(es("auto_retry"), { strategy: "auto_retry", attempted: 2,
 assert.deepStrictEqual(es("payment_link"), { strategy: "payment_link", attempted: 2, succeeded: 1, success_rate: 0.5 }, "payment_link: 2 attempted, 1 ok");
 assert.deepStrictEqual(es("alt_method"), { strategy: "alt_method", attempted: 1, succeeded: 0, success_rate: 0 }, "alt_method: 1 attempted, 0 ok");
 
+// Test case: active attempt priority (pending payment_link notes containing URL take precedence over initial failed auto_retry)
+const multiAttempt = aggregate([
+  {
+    razorpay_payment_id: "pay_multi_attempt",
+    amount: 1000,
+    currency: "INR",
+    status: "failed",
+    created_at: "2026-08-26T10:00:00Z",
+    failure_classifications: [{ failure_reason: "insufficient_funds", confidence: 0.9, suggested_strategy: "auto_retry" }],
+    recovery_attempts: [
+      { strategy: "auto_retry", status: "failed", recovered_amount: null, notes: "Auto-retry failed" },
+      { strategy: "payment_link", status: "pending", recovered_amount: null, notes: "Payment link sent: https://rzp.io/i/TEST1234" },
+    ],
+  },
+]);
+assert.strictEqual(multiAttempt.recent[0].recovery_strategy, "payment_link", "recovery_strategy reflects active payment_link attempt");
+assert.strictEqual(multiAttempt.recent[0].recovery_notes, "Payment link sent: https://rzp.io/i/TEST1234", "recovery_notes reflects payment_link attempt containing URL");
+
 // --- Journeys pagination & filtering tests ---
 const { filterJourneys, getJourneys } = require("./dashboard");
 

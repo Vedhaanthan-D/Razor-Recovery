@@ -21,6 +21,12 @@ function formatTraceItem(p) {
   const attempts = p.recovery_attempts || [];
   const succeeded = attempts.find((a) => a.status === "success") || null;
 
+  const paymentLinkAttempt = attempts.find((a) => a.strategy === "payment_link");
+  const latestAttempt = attempts[attempts.length - 1];
+  const activeAttempt = (paymentLinkAttempt && paymentLinkAttempt.status === "pending")
+    ? paymentLinkAttempt
+    : latestAttempt;
+
   return {
     razorpay_payment_id: p.razorpay_payment_id,
     amount: p.amount,
@@ -37,10 +43,10 @@ function formatTraceItem(p) {
     provider_used: cls ? cls.provider_used : null,
     verified: cls ? !!cls.verified : null,
     advisor_note: cls ? cls.advisor_note : null,
-    recovery_strategy: attempts[0] ? attempts[0].strategy : null,
-    recovery_status: succeeded ? "success" : attempts[0] ? attempts[0].status : null,
+    recovery_strategy: activeAttempt ? activeAttempt.strategy : null,
+    recovery_status: succeeded ? "success" : activeAttempt ? activeAttempt.status : null,
     recovered_amount: succeeded ? succeeded.recovered_amount : null,
-    recovery_notes: attempts[0] ? attempts[0].notes : null,
+    recovery_notes: activeAttempt ? activeAttempt.notes : null,
     attempts: attempts
       .slice()
       .sort((a, b) => String(a.attempted_at || "").localeCompare(String(b.attempted_at || "")))
