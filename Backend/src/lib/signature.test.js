@@ -14,4 +14,10 @@ assert.strictEqual(verifyRazorpaySignature(body + "x", good, secret), false, "ta
 assert.strictEqual(verifyRazorpaySignature(body, "", secret), false, "empty signature should fail");
 assert.strictEqual(verifyRazorpaySignature(null, good, secret), false, "missing body should fail");
 
+// Multi-secret (two-account failover): a match against ANY configured secret passes; none → fail.
+assert.strictEqual(verifyRazorpaySignature(body, good, ["wrong-1", secret]), true, "array: matches second secret");
+assert.strictEqual(verifyRazorpaySignature(body, good, [secret, "wrong-2"]), true, "array: matches first secret");
+assert.strictEqual(verifyRazorpaySignature(body, good, ["wrong-1", "wrong-2"]), false, "array: no secret matches → fail");
+assert.strictEqual(verifyRazorpaySignature(body, good, []), false, "array: empty → fail");
+
 console.log("signature.test.js: all assertions passed");

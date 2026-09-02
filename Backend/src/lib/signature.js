@@ -5,21 +5,28 @@ const crypto = require("crypto");
  * Razorpay signs the raw bytes it sent — never re-stringify req.body (key order /
  * whitespace can differ and break the HMAC). Feed the buffer captured in server.js.
  *
- * @param {Buffer|string} rawBody  raw request body
- * @param {string} signature       x-razorpay-signature header
- * @param {string} secret          RAZORPAY_WEBHOOK_SECRET
+ * `secret` may be a single secret OR an array of secrets. With two Razorpay accounts failing over
+ * (see recoveryService.js) their webhooks hit this SAME endpoint, and each account signs with its own
+ * webhook secret — so a match against ANY configured secret verifies. A plain string keeps the
+ * original single-account behaviour unchanged.
+ *
+ * @param {Buffer|string} rawBody     raw request body
+ * @param {string} signature          x-razorpay-signature header
+ * @param {string|string[]} secret    one or more RAZORPAY_WEBHOOK_SECRET values
  * @returns {boolean}
  */
 function verifyRazorpaySignature(rawBody, signature, secret) {
-  if (!signature || !secret || rawBody == null) return false;
-
-  const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
-  const a = Buffer.from(expected, "utf8");
+  if (!signature || rawBody == null) return false;
+  const secrets = (Array.isArray(secret) ? secret : [secret]).filter(Boolean);
   const b = Buffer.from(signature, "utf8");
 
-  // timingSafeEqual throws on length mismatch, so guard length first.
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
+  for (const s of secrets) {
+    const expected = crypto.createHmac("sha256", s).update(rawBody).digest("hex");
+    const a = Buffer.from(expected, "utf8");
+    // timingSafeEqual throws on length mismatch, so guard length first.
+    if (a.length === b.length && crypto.timingSafeEqual(a, b)) return true;
+  }
+  return false;
 }
 
 module.exports = { verifyRazorpaySignature };

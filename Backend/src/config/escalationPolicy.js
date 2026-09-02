@@ -5,6 +5,7 @@
 //
 //   auto_retry   fails                 -> payment_link  (send the customer a link to complete the charge)
 //   payment_link times out (unpaid)    -> alt_method    (suggest UPI / net-banking)
+//   payment_link cannot be created     -> alt_method    (every Razorpay account at its 30-link test cap)
 //   alt_method   fails                 -> terminal      (payment marked 'lost' — genuinely unrecoverable)
 //
 // ponytail: the original spec's `waitSeconds` (pre-escalation backoff) is omitted — auto_retry already
@@ -16,7 +17,10 @@ const PAYMENT_LINK_TIMEOUT_MINUTES = Number(process.env.PAYMENT_LINK_TIMEOUT_MIN
 
 const ESCALATION_POLICY = {
   auto_retry: { onFail: "payment_link" },
-  payment_link: { onTimeout: "alt_method", timeoutMinutes: PAYMENT_LINK_TIMEOUT_MINUTES },
+  // onTimeout: the link was sent but went unpaid within the window. onFail: the link could NOT be
+  // created at all (e.g. every configured Razorpay account hit its 30-link test cap) — no point
+  // waiting out a timeout on a link that was never sent, so escalate straight to alt_method.
+  payment_link: { onFail: "alt_method", onTimeout: "alt_method", timeoutMinutes: PAYMENT_LINK_TIMEOUT_MINUTES },
   alt_method: { onFail: null }, // terminal — no further escalation
 };
 

@@ -130,7 +130,6 @@ Using the same distinction the app's own [**How It Works**](frontend/src/pages/A
     └── src/
         ├── main.tsx                 router (/  /checkout  /agents  /how-it-works  /debug/payments)
         ├── App.tsx                  dashboard: funnel, money cards, breakdowns, recent activity
-        ├── lib/supabaseClient.ts    anon-key browser client
         ├── components/              Layout · StatusPill · InsightsPanel · JourneyTracker
         └── pages/
             ├── TestCheckout.tsx      /checkout — trigger a real test-mode failed payment
@@ -158,9 +157,8 @@ cp .env.example .env    # fill in Supabase, Razorpay, and LLM provider keys
 npm install
 npm run dev             # http://localhost:3000
 
-# Frontend (separate terminal)
+# Frontend (separate terminal) — no .env needed; it just proxies /api to the backend
 cd frontend
-cp .env.example .env
 npm install
 npm run dev             # http://localhost:5173 — proxies /api to backend
 
@@ -190,8 +188,10 @@ Model ids (`OPENROUTER_MODEL`, `GROQ_MODEL`, `MISTRAL_MODEL`), the primary timeo
 per-session safety ceilings (`MAX_LLM_CALLS_PER_SESSION`, `MAX_RAZORPAY_CALLS_PER_SESSION`) all have sensible defaults —
 see `Backend/.env.example`.
 
-**`frontend/.env`** (from [`frontend/.env.example`](frontend/.env.example)): `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
-(the **anon** key only — safe for the browser).
+**`frontend/.env`** — none required. The frontend is a thin client that talks **only** to the backend over
+relative `/api/*` calls (same-origin in production via the Express static serve; Vite proxies `/api` to
+`http://localhost:3000` in dev — see [`frontend/vite.config.ts`](frontend/vite.config.ts)). All database
+access is server-side through the `service_role` key, so the browser never holds a Supabase key at all.
 
 ---
 
@@ -204,6 +204,7 @@ All routes are mounted under `/api`; debug-only routes live under `/api/debug`.
 | `GET` | `/api/health` | Liveness check — confirms the process is up and Supabase is reachable |
 | `POST` | `/api/webhook/razorpay` | Razorpay webhook: verifies the signature, stores `payment.failed`, handles `payment_link.paid`, then fires classify → recover |
 | `GET` | `/api/dashboard` | Aggregated funnel, money recovered/lost, reason & strategy breakdowns, recent activity |
+| `GET` | `/api/dashboard/journeys` | Per-payment pipeline traces (classify → verify → advise → escalation chain) for the Recovery Journeys page |
 | `GET` | `/api/insights` | Natural-language summary of the dashboard aggregate (cached; safe templated fallback) |
 | `POST` | `/api/insights/ask` | Bounded Q&A over the dashboard's own data — `{ question } → { answer }` |
 | `POST` | `/api/debug/create-order` | **Debug** — create a Razorpay test-mode order for the checkout page |
@@ -241,8 +242,3 @@ reproduce duplicate storms, malformed payloads, provider outages, and quota exha
 [`docs/phase-4.md`](docs/phase-4.md) documents what broke and how it was hardened during Phase 4.
 
 ---
-
-## Status
-
-Built for the **Razorpay AI Buildathon (Track 3: AI Revenue Recovery)**. Private project (`package.json` → `"private": true`),
-test-mode only, no formal open-source license.

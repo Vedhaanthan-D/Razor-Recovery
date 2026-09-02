@@ -138,9 +138,12 @@ async function handlePaymentLinkPaid(req, res) {
 // POST /api/webhook/razorpay — verify signature, store the failed payment, then classify (Phase 2).
 router.post("/webhook/razorpay", async (req, res) => {
   const signature = req.headers["x-razorpay-signature"];
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  // Two-account failover (see recoveryService.js): both accounts post to this same endpoint but each
+  // signs with its own webhook secret — accept a match against either. _2 is optional (single-account
+  // setups just have the one). Use the SAME secret string on both accounts and _2 is simply redundant.
+  const secrets = [process.env.RAZORPAY_WEBHOOK_SECRET, process.env.RAZORPAY_WEBHOOK_SECRET_2].filter(Boolean);
 
-  if (!verifyRazorpaySignature(req.rawBody, signature, secret)) {
+  if (!verifyRazorpaySignature(req.rawBody, signature, secrets)) {
     return res.status(400).json({ error: "invalid signature" });
   }
 

@@ -71,7 +71,7 @@ export default function TestCheckout() {
         handler: startRedirect,
         modal: { ondismiss: startRedirect },
       })
-      rzp.on('payment.failed', function (_response: any) {
+      rzp.on('payment.failed', function () {
         startRedirect()
       })
       rzp.open()

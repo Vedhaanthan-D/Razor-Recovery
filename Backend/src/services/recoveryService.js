@@ -11,10 +11,24 @@ const MAX_RAZORPAY_CALLS_PER_SESSION = Number(process.env.MAX_RAZORPAY_CALLS_PER
 // auto_retry/alt_method are simulated (see below) — they never fabricate a recovered amount, so the
 // only verified "success" is a real paid payment link. A 1-week buildathon proves the decision logic
 // and tracking, not a full notification/re-charge stack.
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+//
+// Razorpay test mode caps payment_link creation at 30 PER ACCOUNT for the account's lifetime (confirmed:
+// once hit, create returns 429 RATE_LIMIT_EXCEEDED "test mode limit of 30 reached for payment_link", and
+// cancelling links does NOT free a slot — there's no delete API either). To survive that mid-demo we
+// allow a SECOND test account's keys as failover: when the primary can't create a link, we retry on the
+// secondary (a fresh 0/30 quota). Both accounts point their webhook at the SAME endpoint; signature
+// verification tries both webhook secrets (see lib/signature.js + routes/webhook.js). Configure the 2nd
+// pair in .env (RAZORPAY_KEY_ID_2 / RAZORPAY_KEY_SECRET_2); omit it and behaviour is primary-only, as before.
+function buildRazorpayClients() {
+  return [
+    { label: "primary", id: process.env.RAZORPAY_KEY_ID, secret: process.env.RAZORPAY_KEY_SECRET },
+    { label: "secondary", id: process.env.RAZORPAY_KEY_ID_2, secret: process.env.RAZORPAY_KEY_SECRET_2 },
+  ]
+    .filter((p) => p.id && p.secret)
+    .map((p) => ({ label: p.label, client: new Razorpay({ key_id: p.id, key_secret: p.secret }) }));
+}
+
+const RAZORPAY_CLIENTS = buildRazorpayClients();
 
 // How long a simulated strategy sits at `pending` before resolving to not-recovered (→ escalate).
 // Short so the funnel visibly moves during a live demo. Override via env if needed.
@@ -49,31 +63,48 @@ function initialAttempt(strategy) {
   }
 }
 
-// Real Razorpay Payment Link. Returns the note to store (with the short_url on success, or the
-// failure reason on error). Never throws — a link failure must not sink the recovery row.
-async function createPaymentLinkNote(payment) {
-  // Session ceiling: skip the real API call once hit; recovery row still gets a note so the funnel stays complete.
-  if (count("razorpay") >= MAX_RAZORPAY_CALLS_PER_SESSION) {
-    console.warn("[recovery] session Razorpay call limit reached — skipping payment link creation");
-    return "Payment link skipped: session Razorpay call limit reached";
+// Real Razorpay Payment Link, with automatic failover across configured accounts. Returns
+// { ok, note }: ok=true + the short_url note on success; ok=false + the failure reason if EVERY
+// configured account failed (typically all at the 30-link test cap). Never throws — a link failure
+// must not sink the recovery row. `clients` is injectable for tests; defaults to the env-configured list.
+async function createPaymentLinkNote(payment, clients = RAZORPAY_CLIENTS) {
+  if (!clients.length) {
+    console.warn("[recovery] no Razorpay keys configured — skipping payment link creation");
+    return { ok: false, note: "Payment link skipped: no Razorpay keys configured" };
   }
-  const n = bump("razorpay");
-  console.log(`[recovery] razorpay call #${n} this session`);
-  try {
-    const link = await razorpay.paymentLink.create({
-      amount: payment.amount, // Razorpay webhook entity amount is already in paise
-      currency: payment.currency || "INR",
-      description: `Retry payment for ${payment.order_id || payment.id}`,
-      reference_id: `rec_${payment.id}`, // unique per payment → idempotent on re-create
-      reminder_enable: true,
-    });
-    console.log(`[recovery] payment_link created for ${payment.id}: ${link.short_url}`);
-    return `Payment link sent: ${link.short_url}`;
-  } catch (err) {
-    const msg = err && err.error && err.error.description ? err.error.description : err.message;
-    console.error(`[recovery] payment_link API failed for ${payment.id}: ${msg}`);
-    return `Payment link creation failed: ${msg}`;
+
+  let lastMsg = "no attempt made";
+  for (const { label, client } of clients) {
+    // Session ceiling: stop once hit; the recovery row still gets a note so the funnel stays complete.
+    if (count("razorpay") >= MAX_RAZORPAY_CALLS_PER_SESSION) {
+      console.warn("[recovery] session Razorpay call limit reached — skipping payment link creation");
+      lastMsg = "session Razorpay call limit reached";
+      break;
+    }
+    const n = bump("razorpay");
+    console.log(`[recovery] razorpay call #${n} this session (key=${label})`);
+    try {
+      const link = await client.paymentLink.create({
+        amount: payment.amount, // Razorpay webhook entity amount is already in paise
+        currency: payment.currency || "INR",
+        description: `Retry payment for ${payment.order_id || payment.id}`,
+        reference_id: `rec_${payment.id}`, // unique per payment → idempotent on re-create (per account)
+        reminder_enable: true,
+      });
+      console.log(`[recovery] payment_link created via ${label} key for ${payment.id}: ${link.short_url}`);
+      return { ok: true, note: `Payment link sent: ${link.short_url}` };
+    } catch (err) {
+      const msg = err && err.error && err.error.description ? err.error.description : err.message;
+      const capHit = !!(err && (err.statusCode === 429 || (err.error && err.error.code === "RATE_LIMIT_EXCEEDED")));
+      lastMsg = msg;
+      console.error(
+        `[recovery] payment_link via ${label} key failed for ${payment.id}: ${msg}` +
+          (capHit ? " — failing over to next account" : "")
+      );
+      // fall through to the next configured account (if any)
+    }
   }
+  return { ok: false, note: `Payment link creation failed: ${lastMsg}` };
 }
 
 // Insert one recovery_attempts row; returns its id (or null on failure — always logged).
@@ -135,7 +166,11 @@ async function executeRecovery(paymentId, payment, strategy, onResolve) {
     const row = initialAttempt(strategy);
 
     if (row.strategy === "payment_link") {
-      row.notes = await createPaymentLinkNote(payment);
+      const result = await createPaymentLinkNote(payment);
+      row.notes = result.note;
+      // No link on ANY account → don't leave a phantom `pending` link that just waits out the timeout.
+      // Mark it failed now and escalate immediately (below).
+      if (!result.ok) row.status = "failed";
     }
 
     const attemptId = await insertAttempt(paymentId, row);
@@ -143,6 +178,11 @@ async function executeRecovery(paymentId, payment, strategy, onResolve) {
 
     if (SIMULATED_STRATEGIES[row.strategy]) {
       scheduleMockedResolution(row.strategy, attemptId, payment, onResolve);
+    } else if (row.strategy === "payment_link" && row.status === "failed") {
+      // Link couldn't be created (all accounts at cap, or another create error) → escalate straight
+      // away via the policy (payment_link onFail → alt_method). The orchestrator still schedules the
+      // link timeout, but it will find this row already `failed` and no-op (no double escalation).
+      if (onResolve) onResolve("failed");
     }
     return attemptId;
   } catch (err) {
@@ -151,4 +191,4 @@ async function executeRecovery(paymentId, payment, strategy, onResolve) {
   }
 }
 
-module.exports = { executeRecovery, initialAttempt };
+module.exports = { executeRecovery, initialAttempt, createPaymentLinkNote };

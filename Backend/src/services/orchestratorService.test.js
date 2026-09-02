@@ -21,11 +21,11 @@ r = nextStrategy("alt_method", "fail");
 assert.strictEqual(r.next, null, "alt_method fail has no next strategy");
 assert.strictEqual(r.terminal, true, "alt_method fail is terminal");
 
-// payment_link has no onFail route (its failure mode is timeout, not a mocked fail) — never escalates
-// on a plain 'fail' signal, and is NOT terminal (a timeout can still route it forward).
+// payment_link 'fail' = the link could not be created (every account at its 30-link cap) → escalate
+// straight to alt_method rather than wait out a timeout on a link that was never sent. Not terminal.
 r = nextStrategy("payment_link", "fail");
-assert.strictEqual(r.next, null, "payment_link has no onFail route");
-assert.strictEqual(r.terminal, false, "payment_link fail is not terminal (only its timeout routes it)");
+assert.strictEqual(r.next, "alt_method", "payment_link create-failure → alt_method");
+assert.strictEqual(r.terminal, false, "payment_link fail is not terminal");
 
 // auto_retry has no timeout route
 assert.strictEqual(nextStrategy("auto_retry", "timeout").next, null, "auto_retry has no timeout route");
